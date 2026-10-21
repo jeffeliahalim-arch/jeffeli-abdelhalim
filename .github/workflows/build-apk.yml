@@ -65,10 +65,21 @@ jobs:
           fi
           unzip -t LaboManager_WebPourAPK_JEFFELI.zip
 
+      
       - name: Extract Android project
         run: |
           mkdir -p extracted
-          unzip -q LaboManager_WebPourAPK_JEFFELI.zip -d extracted
+          unzip -o -q LaboManager_WebPourAPK_JEFFELI.zip -d extracted
+          echo "===== ZIP CONTENTS ====="
+          unzip -l LaboManager_WebPourAPK_JEFFELI.zip | head -100
+          echo "===== GRADLE FILES ====="
+          find extracted -maxdepth 5 -type f \
+            \( -name "gradlew" \
+            -o -name "gradlew.bat" \
+            -o -name "settings.gradle" \
+            -o -name "settings.gradle.kts" \
+            -o -name "build.gradle" \
+            -o -name "build.gradle.kts" \) -print
 
       - name: Locate Android project
         id: project
