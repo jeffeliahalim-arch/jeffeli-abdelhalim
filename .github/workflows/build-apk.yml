@@ -1,129 +1,50 @@
 
-name: Build LaboManager APK
+name: Inspecter le ZIP LaboManager
 
 on:
   workflow_dispatch:
-  push:
-    paths:
-      - 'LaboManager_WebPourAPK_JEFFELI.zip'
-      - '.github/workflows/build-apk.yml'
-
-permissions:
-  contents: read
 
 jobs:
-  build:
-    name: Build Android APK
+  inspecter:
     runs-on: ubuntu-24.04
-    timeout-minutes: 35
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v5
+      - name: Recuperer le depot
+        uses: actions/checkout@v4
 
-      - name: Install Java 17
-        uses: actions/setup-java@v5
-        with:
-          distribution: temurin
-          java-version: '17'
-
-      - name: Locate Android SDK
+      - name: Afficher les fichiers du depot
         run: |
-          echo "ANDROID_HOME=${ANDROID_HOME:-/usr/local/lib/android/sdk}"
-          SDK_ROOT="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
-          echo "ANDROID_HOME=$SDK_ROOT" >> "$GITHUB_ENV"
+          echo "=== Fichiers du depot ==="
+          ls -lah
+          echo "=== Recherche de l'archive ==="
+          find . -type f -iname "*.zip" -print
 
-          SDKMANAGER="$(find "$SDK_ROOT/cmdline-tools" \
-            -type f -name sdkmanager -print -quit)"
+      - name: Examiner le contenu du ZIP
+        run: |
+          ZIP="$(find . -type f -iname 'LaboManager_WebPourAPK_JEFFELI.zip' -print -quit)"
 
-          if [ -z "$SDKMANAGER" ]; then
-            echo "ERROR: sdkmanager not found."
+          if [ -z "$ZIP" ]; then
+            echo "ERREUR : archive introuvable"
             exit 1
           fi
 
-          echo "SDKMANAGER=$SDKMANAGER" >> "$GITHUB_ENV"
-          "$SDKMANAGER" --version
+          echo "=== Archive trouvee : $ZIP ==="
+          unzip -l "$ZIP"
 
-      - name: Accept Android SDK licenses
-        run: |
-          yes | "$SDKMANAGER" --licenses || true
-
-      - name: Install Android SDK packages
-        timeout-minutes: 10
-        run: |
-          "$SDKMANAGER" --install \
-            "platform-tools" \
-            "platforms;android-35" \
-            "build-tools;35.0.0"
-
-      - name: Verify project ZIP
-        run: |
-          if [ ! -f "LaboManager_WebPourAPK_JEFFELI.zip" ]; then
-            echo "ERROR: Project ZIP not found."
-            ls -la
-            exit 1
-          fi
-          unzip -t LaboManager_WebPourAPK_JEFFELI.zip
-
-      
-      - name: Extract Android project
-        run: |
+          echo "=== Extraction ==="
           mkdir -p extracted
-          unzip -o -q LaboManager_WebPourAPK_JEFFELI.zip -d extracted
-          echo "===== ZIP CONTENTS ====="
-          unzip -l LaboManager_WebPourAPK_JEFFELI.zip | head -100
-          echo "===== GRADLE FILES ====="
-          find extracted -maxdepth 5 -type f \
-            \( -name "gradlew" \
-            -o -name "gradlew.bat" \
-            -o -name "settings.gradle" \
-            -o -name "settings.gradle.kts" \
-            -o -name "build.gradle" \
-            -o -name "build.gradle.kts" \) -print
+          unzip -o "$ZIP" -d extracted
 
-      - name: Locate Android project
-        id: project
-        run: |
-          WRAPPER="$(find extracted -type f \
-            -name gradlew -print -quit)"
+          echo "=== Liste des fichiers extraits ==="
+          find extracted -maxdepth 6 -type f -print
 
-          if [ -z "$WRAPPER" ]; then
-            echo "ERROR: gradlew not found in ZIP."
-            exit 1
-          fi
-
-          PROJECT_DIR="$(dirname "$WRAPPER")"
-
-          if [ ! -f "$PROJECT_DIR/settings.gradle" ] && \
-             [ ! -f "$PROJECT_DIR/settings.gradle.kts" ]; then
-            echo "ERROR: settings.gradle not found."
-            exit 1
-          fi
-
-          if [ ! -f "$PROJECT_DIR/app/build.gradle" ] && \
-             [ ! -f "$PROJECT_DIR/app/build.gradle.kts" ]; then
-            echo "ERROR: app Gradle file not found."
-            exit 1
-          fi
-
-          echo "dir=$PROJECT_DIR" >> "$GITHUB_OUTPUT"
-          echo "Project found: $PROJECT_DIR"
-
-      - name: Build debug APK
-        working-directory: ${{ steps.project.outputs.dir }}
-        timeout-minutes: 20
-        run: |
-          chmod +x ./gradlew
-          ./gradlew assembleDebug \
-            --stacktrace \
-            --no-daemon \
-            --console=plain
-
-      - name: Upload APK
-        if: success()
-        uses: actions/upload-artifact@v4
-        with:
-          name: LaboManager-APK
-          path: ${{ steps.project.outputs.dir }}/app/build/outputs/apk/debug/*.apk
-          if-no-files-found: error
-          retention-days: 7
+          echo "=== Recherche des fichiers Gradle ==="
+          find extracted -type f \
+            \( -iname 'gradlew' \
+            -o -iname 'gradlew.bat' \
+            -o -iname 'gradle-wrapper.jar' \
+            -o -iname 'gradle-wrapper.properties' \
+            -o -iname 'settings.gradle' \
+            -o -iname 'settings.gradle.kts' \
+            -o -iname 'build.gradle' \
+            -o -iname 'build.gradle.kts' \) -print
