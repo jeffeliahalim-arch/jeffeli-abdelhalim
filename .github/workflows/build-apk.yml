@@ -29,44 +29,74 @@ jobs:
 
       - name: Configure Android SDK
         uses: android-actions/setup-android@v3
+        with:
+          packages: |
+            platform-tools
+            platforms;android-35
+            build-tools;35.0.0
 
-      - name: Accept Android SDK licenses
-        run: yes | sdkmanager --licenses || true
-
-      - name: Install Android SDK packages
+      - name: Check ZIP file
         run: |
-          sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
+          if [ ! -f "LaboManager_WebPourAPK_JEFFELI.zip" ]; then
+            echo "ERROR: ZIP file not found in repository root."
+            ls -la
+            exit 1
+          fi
+          unzip -t LaboManager_WebPourAPK_JEFFELI.zip
 
       - name: Extract Android project
         run: |
           mkdir -p extracted
           unzip -q LaboManager_WebPourAPK_JEFFELI.zip -d extracted
+          echo "Project extracted successfully."
+          find extracted -maxdepth 4 -type f \
+            \( -name "gradlew" -o -name "settings.gradle" \
+            -o -name "settings.gradle.kts" \) -print
 
       - name: Locate Android project
         id: project
         run: |
           WRAPPER="$(find extracted -type f -name gradlew -print -quit)"
+
           if [ -z "$WRAPPER" ]; then
-            echo "ERROR: gradlew not found in ZIP"
+            echo "ERROR: gradlew not found inside ZIP."
             exit 1
           fi
 
           PROJECT_DIR="$(dirname "$WRAPPER")"
 
-          if [ ! -f "$PROJECT_DIR/app/build.gradle" ] && \
-             [ ! -f "$PROJECT_DIR/app/build.gradle.kts" ]; then
-            echo "ERROR: app/build.gradle or app/build.gradle.kts not found"
+          if [ ! -f "$PROJECT_DIR/settings.gradle" ] && \
+             [ ! -f "$PROJECT_DIR/settings.gradle.kts" ]; then
+            echo "ERROR: settings.gradle not found."
             exit 1
           fi
 
+          if [ ! -f "$PROJECT_DIR/app/build.gradle" ] && \
+             [ ! -f "$PROJECT_DIR/app/build.gradle.kts" ]; then
+            echo "ERROR: app/build.gradle or app/build.gradle.kts not found."
+            exit 1
+          fi
+
+          echo "Project directory: $PROJECT_DIR"
           echo "dir=$PROJECT_DIR" >> "$GITHUB_OUTPUT"
 
       - name: Build debug APK
         working-directory: ${{ steps.project.outputs.dir }}
         timeout-minutes: 20
+        env:
+          GRADLE_OPTS: "-Dorg.gradle.daemon=false"
         run: |
           chmod +x ./gradlew
-          ./gradlew assembleDebug --stacktrace --no-daemon --console=plain
+          ./gradlew assembleDebug \
+            --stacktrace \
+            --no-daemon \
+            --console=plain
+
+      - name: Find generated APK
+        if: success()
+        working-directory: ${{ steps.project.outputs.dir }}
+        run: |
+          find app/build/outputs/apk -type f -name "*.apk" -print
 
       - name: Upload APK
         if: success()
@@ -76,4 +106,3 @@ jobs:
           path: ${{ steps.project.outputs.dir }}/app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
           retention-days: 7
-
