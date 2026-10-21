@@ -1,0 +1,55 @@
+
+name: Build LaboManager APK
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'LaboManager_WebPourAPK_JEFFELI.zip'
+      - '.github/workflows/build-apk.yml'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download repository files
+        uses: actions/checkout@v4
+
+      - name: Install Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Extract Android project from ZIP
+        run: |
+          mkdir -p extracted
+          unzip -q LaboManager_WebPourAPK_JEFFELI.zip -d extracted
+          find extracted -maxdepth 5 -name gradlew -print
+
+      - name: Locate Android project
+        id: project
+        run: |
+          PROJECT_DIR="$(dirname "$(find extracted -type f -name gradlew -print -quit)")"
+          if [ -z "$PROJECT_DIR" ] || [ ! -f "$PROJECT_DIR/app/build.gradle" ]; then
+            echo "Android project or app/build.gradle not found in ZIP"
+            exit 1
+          fi
+          echo "dir=$PROJECT_DIR" >> "$GITHUB_OUTPUT"
+
+      - name: Build APK
+        working-directory: ${{ steps.project.outputs.dir }}
+        run: |
+          chmod +x ./gradlew
+          ./gradlew assembleDebug --stacktrace
+
+      - name: Save APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: LaboManager-APK
+          path: ${{ steps.project.outputs.dir }}/app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
